@@ -3,11 +3,12 @@
  * Handles caching, offline support, and background sync
  */
 
-const CACHE_NAME = 'sendnotes-v1';
+const CACHE_NAME = 'sendnotes-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/css/style.css',
+  '/js/config.js',
   '/js/app.js',
   '/js/api.js',
   '/js/offline-store.js',
@@ -59,20 +60,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests: network first, no cache
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/.netlify/functions/')) {
+  // Supabase API requests: always network (handled by app's offline logic)
+  if (url.hostname.includes('supabase.co')) {
+    return;
+  }
+
+  // CDN requests (like Supabase JS): network first, cache fallback
+  if (url.hostname.includes('cdn.jsdelivr.net')) {
     event.respondWith(
       fetch(request)
-        .catch(() => {
-          // Return a JSON error for failed API requests
-          return new Response(
-            JSON.stringify({ error: 'Offline', message: 'You are currently offline' }),
-            {
-              status: 503,
-              headers: { 'Content-Type': 'application/json' }
-            }
-          );
+        .then((response) => {
+          // Cache the CDN response
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then((cache) => cache.put(request, responseToCache));
+          return response;
         })
+        .catch(() => caches.match(request))
     );
     return;
   }
@@ -99,7 +103,7 @@ self.addEventListener('fetch', (event) => {
         // Not in cache, fetch from network
         return fetch(request)
           .then((response) => {
-            // Cache successful responses
+            // Cache successful responses from same origin
             if (response.ok && url.origin === self.location.origin) {
               const responseToCache = response.clone();
               caches.open(CACHE_NAME)

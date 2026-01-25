@@ -1,8 +1,21 @@
 /**
- * API client with offline support
+ * API client using Supabase directly with offline support
  */
 const API = {
-  BASE_URL: '/api',
+  supabase: null,
+
+  /**
+   * Initialize Supabase client
+   */
+  init() {
+    if (!this.supabase) {
+      this.supabase = window.supabase.createClient(
+        CONFIG.SUPABASE_URL,
+        CONFIG.SUPABASE_ANON_KEY
+      );
+    }
+    return this.supabase;
+  },
 
   /**
    * Check if we're online
@@ -12,30 +25,14 @@ const API = {
   },
 
   /**
-   * Make an API request
+   * Get the Monday of the current week
    */
-  async request(endpoint, options = {}) {
-    const url = `${this.BASE_URL}${endpoint}`;
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    };
-
-    if (options.body && typeof options.body === 'object') {
-      config.body = JSON.stringify(options.body);
-    }
-
-    const response = await fetch(url, config);
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(error.message || `HTTP ${response.status}`);
-    }
-
-    return response.json();
+  getCurrentWeekMonday() {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(now.setDate(diff));
+    return monday.toISOString().split('T')[0];
   },
 
   /**
@@ -47,10 +44,21 @@ const API = {
     }
 
     try {
-      const items = await this.request('/items');
+      this.init();
+      const weekOf = this.getCurrentWeekMonday();
+
+      const { data, error } = await this.supabase
+        .from('items')
+        .select('*')
+        .eq('status', 'active')
+        .eq('week_of', weekOf)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
       // Update local store with server data
-      await OfflineStore.replaceAllItems(items);
-      return items;
+      await OfflineStore.replaceAllItems(data);
+      return data;
     } catch (error) {
       console.warn('Failed to fetch items, using local data:', error);
       return OfflineStore.getActiveItems();
@@ -62,11 +70,12 @@ const API = {
    */
   async createItem(data) {
     const tempId = OfflineStore.generateTempId();
+    const weekOf = this.getCurrentWeekMonday();
     const localItem = {
       id: tempId,
       ...data,
       status: 'active',
-      week_of: OfflineStore.getCurrentWeekMonday(),
+      week_of: weekOf,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       synced: false
@@ -80,16 +89,28 @@ const API = {
       await OfflineStore.queueOperation({
         type: 'create',
         tempId,
-        data
+        data: { ...data, week_of: weekOf }
       });
       return localItem;
     }
 
     try {
-      const serverItem = await this.request('/items', {
-        method: 'POST',
-        body: data
-      });
+      this.init();
+      const { data: serverItem, error } = await this.supabase
+        .from('items')
+        .insert([{
+          url: data.url || null,
+          title: data.title || null,
+          notes: data.notes || null,
+          category: data.category || null,
+          status: 'active',
+          week_of: weekOf
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
       // Update local with server data
       await OfflineStore.markSynced(tempId, serverItem);
       return serverItem;
@@ -98,7 +119,7 @@ const API = {
       await OfflineStore.queueOperation({
         type: 'create',
         tempId,
-        data
+        data: { ...data, week_of: weekOf }
       });
       return localItem;
     }
@@ -134,10 +155,25 @@ const API = {
       }
 
       try {
-        const serverItem = await this.request(`/items/${id}`, {
-          method: 'PUT',
-          body: data
-        });
+        this.init();
+        const updateData = {
+          updated_at: new Date().toISOString()
+        };
+        if (data.url !== undefined) updateData.url = data.url;
+        if (data.title !== undefined) updateData.title = data.title;
+        if (data.notes !== undefined) updateData.notes = data.notes;
+        if (data.category !== undefined) updateData.category = data.category;
+        if (data.status !== undefined) updateData.status = data.status;
+
+        const { data: serverItem, error } = await this.supabase
+          .from('items')
+          .update(updateData)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
         await OfflineStore.markSynced(id, serverItem);
         return serverItem;
       } catch (error) {
@@ -184,7 +220,17 @@ const API = {
       }
 
       try {
-        await this.request(`/items/${id}`, { method: 'DELETE' });
+        this.init();
+        const { error } = await this.supabase
+          .from('items')
+          .update({
+            status: 'deleted',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+
         // Remove from local store after server confirms
         await OfflineStore.deleteItem(id);
       } catch (error) {
@@ -198,77 +244,58 @@ const API = {
   },
 
   /**
-   * Generate newsletter
+   * Generate newsletter (always done locally now)
    */
   async generateNewsletter(intro = '') {
-    // Get items from local store (they should be synced)
     const items = await OfflineStore.getActiveItems();
-
-    if (!this.isOnline()) {
-      // Generate locally if offline
-      return this.generateNewsletterLocally(items, intro);
-    }
-
-    try {
-      return await this.request('/generate', {
-        method: 'POST',
-        body: { intro }
-      });
-    } catch (error) {
-      console.warn('Failed to generate on server, generating locally:', error);
-      return this.generateNewsletterLocally(items, intro);
-    }
+    return this.generateNewsletterLocally(items, intro);
   },
 
   /**
-   * Generate newsletter HTML locally (fallback)
+   * Generate newsletter HTML locally
    */
   generateNewsletterLocally(items, intro) {
     const itemsHtml = items.map(item => {
-      let html = '<div class="item">';
+      let html = '<div style="margin-bottom: 24px;">';
       if (item.category) {
-        html += `<div class="category">${this.escapeHtml(item.category)}</div>`;
+        html += `<div style="font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 4px;">${this.escapeHtml(item.category)}</div>`;
       }
       if (item.url) {
-        html += `<div class="item-title"><a href="${this.escapeHtml(item.url)}">${this.escapeHtml(item.title || item.url)}</a></div>`;
+        html += `<div style="font-weight: 600; font-size: 16px;"><a href="${this.escapeHtml(item.url)}" style="color: #2563eb; text-decoration: none;">${this.escapeHtml(item.title || item.url)}</a></div>`;
       } else if (item.title) {
-        html += `<div class="item-title">${this.escapeHtml(item.title)}</div>`;
+        html += `<div style="font-weight: 600; font-size: 16px;">${this.escapeHtml(item.title)}</div>`;
       }
       if (item.notes) {
-        html += `<div class="item-notes">${this.escapeHtml(item.notes)}</div>`;
+        html += `<div style="margin-top: 8px; color: #555;">${this.escapeHtml(item.notes).replace(/\n/g, '<br>')}</div>`;
       }
       html += '</div>';
       return html;
-    }).join('\n  ');
+    }).join('\n');
 
-    const introHtml = intro ? `<p>${this.escapeHtml(intro)}</p>\n  ` : '';
+    const introHtml = intro
+      ? `<p style="margin-bottom: 24px;">${this.escapeHtml(intro)}</p>`
+      : '';
 
     const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.6; color: #333; max-width: 600px; }
-    a { color: #2563eb; }
-    .item { margin-bottom: 24px; }
-    .item-title { font-weight: 600; font-size: 16px; }
-    .item-notes { margin-top: 8px; color: #555; }
-    .category { font-size: 12px; color: #888; text-transform: uppercase; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body>
-  ${introHtml}${itemsHtml}
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  ${introHtml}
+  ${itemsHtml}
 </body>
 </html>`;
 
-    const plain = (intro ? intro + '\n\n' : '') + items.map(item => {
+    const plain = (intro ? intro + '\n\n---\n\n' : '') + items.map(item => {
       let text = '';
       if (item.category) text += `[${item.category}] `;
       text += item.title || item.url || 'Note';
       if (item.url) text += `\n${item.url}`;
       if (item.notes) text += `\n${item.notes}`;
       return text;
-    }).join('\n\n');
+    }).join('\n\n---\n\n');
 
     return { html, plain };
   },
@@ -290,20 +317,33 @@ const API = {
    * Archive all active items
    */
   async archiveItems() {
+    const weekOf = this.getCurrentWeekMonday();
+
     if (!this.isOnline()) {
       // Archive locally and queue
       await OfflineStore.archiveActiveItems();
-      await OfflineStore.queueOperation({ type: 'archive' });
+      await OfflineStore.queueOperation({ type: 'archive', weekOf });
       return;
     }
 
     try {
-      await this.request('/archive', { method: 'POST' });
+      this.init();
+      const { error } = await this.supabase
+        .from('items')
+        .update({
+          status: 'archived',
+          updated_at: new Date().toISOString()
+        })
+        .eq('status', 'active')
+        .eq('week_of', weekOf);
+
+      if (error) throw error;
+
       await OfflineStore.archiveActiveItems();
     } catch (error) {
       console.warn('Failed to archive on server, queued for later:', error);
       await OfflineStore.archiveActiveItems();
-      await OfflineStore.queueOperation({ type: 'archive' });
+      await OfflineStore.queueOperation({ type: 'archive', weekOf });
     }
   },
 
@@ -313,6 +353,7 @@ const API = {
   async syncQueue() {
     if (!this.isOnline()) return { synced: 0, failed: 0 };
 
+    this.init();
     const operations = await OfflineStore.getQueuedOperations();
     let synced = 0;
     let failed = 0;
@@ -321,28 +362,62 @@ const API = {
       try {
         switch (op.type) {
           case 'create': {
-            const serverItem = await this.request('/items', {
-              method: 'POST',
-              body: op.data
-            });
+            const { data: serverItem, error } = await this.supabase
+              .from('items')
+              .insert([{
+                url: op.data.url || null,
+                title: op.data.title || null,
+                notes: op.data.notes || null,
+                category: op.data.category || null,
+                status: 'active',
+                week_of: op.data.week_of
+              }])
+              .select()
+              .single();
+
+            if (error) throw error;
             await OfflineStore.markSynced(op.tempId, serverItem);
             break;
           }
           case 'update': {
-            const serverItem = await this.request(`/items/${op.id}`, {
-              method: 'PUT',
-              body: op.data
-            });
+            const { data: serverItem, error } = await this.supabase
+              .from('items')
+              .update({
+                ...op.data,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', op.id)
+              .select()
+              .single();
+
+            if (error) throw error;
             await OfflineStore.markSynced(op.id, serverItem);
             break;
           }
           case 'delete': {
-            await this.request(`/items/${op.id}`, { method: 'DELETE' });
+            const { error } = await this.supabase
+              .from('items')
+              .update({
+                status: 'deleted',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', op.id);
+
+            if (error) throw error;
             await OfflineStore.deleteItem(op.id);
             break;
           }
           case 'archive': {
-            await this.request('/archive', { method: 'POST' });
+            const { error } = await this.supabase
+              .from('items')
+              .update({
+                status: 'archived',
+                updated_at: new Date().toISOString()
+              })
+              .eq('status', 'active')
+              .eq('week_of', op.weekOf);
+
+            if (error) throw error;
             break;
           }
         }
@@ -368,9 +443,19 @@ const API = {
       await this.syncQueue();
 
       // Then fetch fresh data from server
-      const serverItems = await this.request('/items');
-      await OfflineStore.replaceAllItems(serverItems);
+      this.init();
+      const weekOf = this.getCurrentWeekMonday();
 
+      const { data, error } = await this.supabase
+        .from('items')
+        .select('*')
+        .eq('status', 'active')
+        .eq('week_of', weekOf)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      await OfflineStore.replaceAllItems(data);
       return true;
     } catch (error) {
       console.error('Full sync failed:', error);
@@ -378,8 +463,3 @@ const API = {
     }
   }
 };
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = API;
-}

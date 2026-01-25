@@ -13,9 +13,8 @@ A Progressive Web App for collecting notes, links, and articles throughout the w
 ## Tech Stack
 
 - **Frontend**: Vanilla HTML/CSS/JS (PWA)
-- **Backend**: Netlify Functions (serverless)
-- **Database**: Supabase (Postgres)
-- **Hosting**: Netlify
+- **Database**: Supabase (Postgres) - client-side access
+- **Hosting**: Netlify (static site)
 
 ## Setup Instructions
 
@@ -25,6 +24,7 @@ A Progressive Web App for collecting notes, links, and articles throughout the w
 2. In the SQL Editor, run the following schema:
 
 ```sql
+-- Create the items table
 create table items (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz default now(),
@@ -37,37 +37,45 @@ create table items (
   week_of date
 );
 
+-- Create indexes for common queries
 create index items_status_idx on items(status);
 create index items_week_idx on items(week_of);
+
+-- Enable Row Level Security
+alter table items enable row level security;
+
+-- Create a policy that allows all operations (public access)
+-- For a personal app, this is fine. For multi-user, you'd add auth.
+create policy "Allow all operations" on items
+  for all
+  using (true)
+  with check (true);
 ```
 
-3. Go to Settings → API and copy your project URL and anon key
+3. Go to **Settings → API** and copy your:
+   - Project URL (e.g., `https://xxxxx.supabase.co`)
+   - Anon/public key (the `anon` `public` key)
 
-### 2. Configure Netlify
+### 2. Configure the App
 
-1. Connect your repository to Netlify
-2. Go to Site settings → Environment variables
-3. Add the following variables:
-   - `SUPABASE_URL`: Your Supabase project URL
-   - `SUPABASE_ANON_KEY`: Your Supabase anon key
+Edit `js/config.js` and add your Supabase credentials:
 
-### 3. Generate App Icons
-
-Replace the placeholder icons with proper PNG files:
-
-```bash
-# Using ImageMagick (if installed)
-convert icons/icon.svg -resize 192x192 icons/icon-192.png
-convert icons/icon.svg -resize 512x512 icons/icon-512.png
-
-# Or use an online tool like realfavicongenerator.net
+```javascript
+const CONFIG = {
+  SUPABASE_URL: 'https://your-project.supabase.co',
+  SUPABASE_ANON_KEY: 'your-anon-key-here'
+};
 ```
 
-### 4. Deploy
+> **Note:** The anon key is safe to expose in frontend code. Security is enforced through Row Level Security (RLS) policies in Supabase.
 
-Push to your repository - Netlify will automatically deploy.
+### 3. Deploy to Netlify
 
-### 5. Install as PWA
+1. Push your code to GitHub
+2. Connect the repository to Netlify
+3. Deploy - no build settings or environment variables needed!
+
+### 4. Install as PWA
 
 On mobile:
 - **iOS**: Open in Safari → Share → Add to Home Screen
@@ -78,29 +86,18 @@ On desktop:
 
 ## Local Development
 
+You can simply open `index.html` in a browser, or use any static server:
+
 ```bash
-# Install dependencies
-npm install
+# Using Python
+python3 -m http.server 8000
 
-# Install Netlify CLI globally (if not already)
-npm install -g netlify-cli
+# Using Node.js (npx)
+npx serve .
 
-# Start local dev server
+# Using Netlify CLI
 netlify dev
 ```
-
-The app will be available at `http://localhost:8888`.
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/items` | Get active items for current week |
-| POST | `/api/items` | Create a new item |
-| PUT | `/api/items/:id` | Update an item |
-| DELETE | `/api/items/:id` | Soft-delete an item |
-| POST | `/api/generate` | Generate newsletter HTML |
-| POST | `/api/archive` | Archive all active items |
 
 ## Project Structure
 
@@ -112,20 +109,37 @@ The app will be available at `http://localhost:8888`.
 ├── css/
 │   └── style.css           # Styles
 ├── js/
+│   ├── config.js           # Supabase configuration
 │   ├── app.js              # Main app logic
-│   ├── api.js              # API client with offline queue
+│   ├── api.js              # Supabase client with offline queue
 │   └── offline-store.js    # IndexedDB wrapper
-├── netlify/
-│   └── functions/
-│       ├── items.js        # Items CRUD
-│       ├── generate.js     # Newsletter generation
-│       └── archive.js      # Archive items
 ├── icons/
 │   ├── icon.svg            # Source icon
 │   ├── icon-192.png        # PWA icon (192x192)
 │   └── icon-512.png        # PWA icon (512x512)
 ├── netlify.toml            # Netlify configuration
-└── package.json            # Dependencies
+└── package.json            # Package metadata
+```
+
+## Security Notes
+
+This app uses Supabase with public (anon) access:
+
+- The anon key only allows operations permitted by RLS policies
+- The default RLS policy allows all operations (suitable for personal use)
+- For multi-user scenarios, add authentication and update RLS policies
+
+To restrict access to authenticated users only, update the RLS policy:
+
+```sql
+-- Drop the public policy
+drop policy "Allow all operations" on items;
+
+-- Create authenticated-only policy
+create policy "Authenticated users only" on items
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 ```
 
 ## License
