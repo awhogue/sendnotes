@@ -42,6 +42,7 @@ const App = {
     this.elements = {
       // Quick add
       quickUrl: document.getElementById('quick-url'),
+      quickTitle: document.getElementById('quick-title'),
       quickNotes: document.getElementById('quick-notes'),
       quickCategory: document.getElementById('quick-category'),
       quickAddBtn: document.getElementById('quick-add-btn'),
@@ -223,17 +224,21 @@ const App = {
    */
   async handleQuickAdd() {
     const url = this.elements.quickUrl.value.trim();
+    const title = this.elements.quickTitle.value.trim();
     const notes = this.elements.quickNotes.value.trim();
     const category = this.elements.quickCategory.value.trim();
 
-    if (!url && !notes) {
-      this.showToast('Please enter a URL or notes', 'error');
+    if (!url && !notes && !title) {
+      this.showToast('Please enter a URL, title, or notes', 'error');
       return;
     }
 
+    // Use provided title, or fall back to domain/first line of notes
+    const autoTitle = url ? this.extractDomain(url) : (notes.split('\n')[0].substring(0, 100));
+
     const data = {
       url: url || null,
-      title: url ? this.extractDomain(url) : (notes.split('\n')[0].substring(0, 100)),
+      title: title || autoTitle || null,
       notes: notes || null,
       category: category || null
     };
@@ -245,6 +250,7 @@ const App = {
 
       // Clear form
       this.elements.quickUrl.value = '';
+      this.elements.quickTitle.value = '';
       this.elements.quickNotes.value = '';
       this.elements.quickCategory.value = '';
 
