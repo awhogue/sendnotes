@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Collect notes and links for your weekly newsletter">
+  <title>SendNotes</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header-title">SendNotes</h1>
+      <button id="generate-btn" class="btn btn-primary">Generate Newsletter</button>
+    </header>
+
+    <!-- Quick Add Bar -->
+    <div class="quick-add">
+      <input type="url" id="quick-url" placeholder="Paste a URL..." class="input">
+      <textarea id="quick-notes" placeholder="Add notes (optional)..." class="input textarea" rows="2"></textarea>
+      <div class="quick-add-actions">
+        <input type="text" id="quick-category" placeholder="Category" class="input input-small">
+        <button id="quick-add-btn" class="btn btn-primary">Add</button>
+      </div>
+    </div>
+
+    <!-- Sync Status -->
+    <div id="sync-status" class="sync-status hidden">
+      <span class="sync-icon"></span>
+      <span class="sync-text">Syncing...</span>
+    </div>
+
+    <!-- Items List -->
+    <main class="items-container">
+      <div id="items-list" class="items-list"></div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">📝</div>
+        <h2>No items this week</h2>
+        <p>Add a link or note above to get started with your newsletter.</p>
+      </div>
+    </main>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Edit Item</h2>
+          <button class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="edit-form" class="modal-body">
+          <input type="hidden" id="edit-id">
+          <div class="form-group">
+            <label for="edit-url">URL (optional)</label>
+            <input type="url" id="edit-url" class="input" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label for="edit-title">Title</label>
+            <input type="text" id="edit-title" class="input" placeholder="Article title or note heading">
+          </div>
+          <div class="form-group">
+            <label for="edit-notes">Notes</label>
+            <textarea id="edit-notes" class="input textarea" rows="4" placeholder="Your thoughts..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="edit-category">Category</label>
+            <input type="text" id="edit-category" class="input" placeholder="e.g., AI, Tech, Life">
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Generate Newsletter Modal -->
+    <div id="generate-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h2>Generate Newsletter</h2>
+          <button class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="newsletter-intro">Introduction (optional)</label>
+            <textarea id="newsletter-intro" class="input textarea" rows="3" placeholder="Write a brief intro for this week's newsletter..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Preview</label>
+            <div id="newsletter-preview" class="newsletter-preview"></div>
+          </div>
+          <div class="generate-actions">
+            <button id="copy-html-btn" class="btn btn-primary">Copy HTML</button>
+            <button id="copy-plain-btn" class="btn btn-secondary">Copy Plain Text</button>
+          </div>
+          <hr class="divider">
+          <div class="archive-section">
+            <p class="archive-note">After sending your newsletter, archive these items to start fresh next week.</p>
+            <button id="archive-btn" class="btn btn-danger">Archive & Start New Week</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+  </div>
+
+  <script src="/js/offline-store.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
