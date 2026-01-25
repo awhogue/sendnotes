@@ -146,8 +146,8 @@ const App = {
         this.elements.quickNotes.value = text;
       }
 
-      // Clear the URL params
-      window.history.replaceState({}, '', '/');
+      // Clear the URL params (preserve current path)
+      window.history.replaceState({}, '', window.location.pathname);
 
       // Focus the add button
       this.elements.quickAddBtn.focus();
@@ -481,7 +481,7 @@ const App = {
   async registerServiceWorker() {
     if ('serviceWorker' in navigator) {
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
+        const registration = await navigator.serviceWorker.register('./sw.js');
         console.log('Service worker registered:', registration.scope);
 
         // Listen for updates

@@ -3,18 +3,20 @@
  * Handles caching, offline support, and background sync
  */
 
-const CACHE_NAME = 'sendnotes-v2';
+const CACHE_NAME = 'sendnotes-v3';
+
+// Use relative paths - service worker scope is its directory
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/config.js',
-  '/js/app.js',
-  '/js/api.js',
-  '/js/offline-store.js',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  './',
+  './index.html',
+  './css/style.css',
+  './js/config.js',
+  './js/app.js',
+  './js/api.js',
+  './js/offline-store.js',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 /**
@@ -114,7 +116,7 @@ self.addEventListener('fetch', (event) => {
           .catch(() => {
             // If it's a navigation request, return the cached index.html
             if (request.mode === 'navigate') {
-              return caches.match('/index.html');
+              return caches.match('./index.html');
             }
             return new Response('Offline', { status: 503 });
           });
@@ -157,8 +159,8 @@ self.addEventListener('message', (event) => {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : 'New notification',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -182,13 +184,13 @@ self.addEventListener('notificationclick', (event) => {
       .then((clientList) => {
         // If there's already a window open, focus it
         for (const client of clientList) {
-          if (client.url === '/' && 'focus' in client) {
+          if ('focus' in client) {
             return client.focus();
           }
         }
         // Otherwise open a new window
         if (clients.openWindow) {
-          return clients.openWindow('/');
+          return clients.openWindow('./');
         }
       })
   );

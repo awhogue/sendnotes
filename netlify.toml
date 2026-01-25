@@ -1,13 +1,2 @@
 [build]
   publish = "."
-
-[[redirects]]
-  from = "/share"
-  to = "/"
-  status = 200
-
-# SPA fallback - serve index.html for all routes
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
