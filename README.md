@@ -24,6 +24,10 @@ A Progressive Web App for collecting notes, links, and articles throughout the w
 2. In the SQL Editor, run the following schema:
 
 ```sql
+-- Drop existing table if re-running this setup
+drop policy if exists "Allow all operations" on items;
+drop table if exists items;
+
 -- Create the items table
 create table items (
   id uuid primary key default gen_random_uuid(),
