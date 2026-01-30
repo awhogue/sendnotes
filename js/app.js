@@ -189,6 +189,13 @@ const App = {
       if (e.key === 'Enter') this.handleQuickAdd();
     });
 
+    // Auto-fetch title when URL is entered
+    this.elements.quickUrl.addEventListener('blur', () => this.handleUrlChange());
+    this.elements.quickUrl.addEventListener('paste', () => {
+      // Small delay to let paste complete
+      setTimeout(() => this.handleUrlChange(), 100);
+    });
+
     // Generate button
     this.elements.generateBtn.addEventListener('click', () => this.openGenerateModal());
 
@@ -371,6 +378,61 @@ const App = {
     } catch {
       return url;
     }
+  },
+
+  /**
+   * Handle URL input change - auto-fetch title
+   */
+  async handleUrlChange() {
+    const url = this.elements.quickUrl.value.trim();
+    const titleField = this.elements.quickTitle;
+
+    // Only fetch if URL is valid and title is empty
+    if (!url || titleField.value.trim()) return;
+
+    try {
+      new URL(url); // Validate URL
+    } catch {
+      return; // Invalid URL, skip
+    }
+
+    // Show loading state
+    titleField.placeholder = 'Fetching title...';
+
+    try {
+      const title = await this.fetchPageTitle(url);
+      if (title && !titleField.value.trim()) {
+        titleField.value = title;
+      }
+    } catch (error) {
+      console.warn('Failed to fetch title:', error);
+    } finally {
+      titleField.placeholder = 'Title (for newsletter link text)';
+    }
+  },
+
+  /**
+   * Fetch page title via CORS proxy
+   */
+  async fetchPageTitle(url) {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+
+    const response = await fetch(proxyUrl);
+    if (!response.ok) throw new Error('Proxy request failed');
+
+    const data = await response.json();
+    if (!data.contents) throw new Error('No content returned');
+
+    // Parse HTML and extract title
+    const match = data.contents.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (match && match[1]) {
+      // Decode HTML entities and clean up
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = match[1].trim();
+      return textarea.value;
+    }
+
+    throw new Error('No title found');
   },
 
   /**
