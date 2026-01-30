@@ -5,6 +5,7 @@ const App = {
   items: [],
   currentEditId: null,
   newsletterData: null,
+  user: null,
 
   // DOM Elements
   elements: {},
@@ -16,7 +17,47 @@ const App = {
     // Cache DOM elements
     this.cacheElements();
 
-    // Set up event listeners
+    // Set up auth event listeners
+    this.bindAuthEvents();
+
+    // Initialize Supabase and check auth
+    API.init();
+    await this.checkAuth();
+
+    // Listen for auth state changes
+    API.supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        this.handleSignIn(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        this.handleSignOut();
+      }
+    });
+
+    // Register service worker
+    this.registerServiceWorker();
+  },
+
+  /**
+   * Check current auth state
+   */
+  async checkAuth() {
+    const { data: { session } } = await API.supabase.auth.getSession();
+
+    if (session?.user) {
+      await this.handleSignIn(session.user);
+    } else {
+      this.showLoginScreen();
+    }
+  },
+
+  /**
+   * Handle successful sign in
+   */
+  async handleSignIn(user) {
+    this.user = user;
+    this.showApp();
+
+    // Set up app event listeners
     this.bindEvents();
 
     // Initialize offline store
@@ -28,11 +69,67 @@ const App = {
     // Load items
     await this.loadItems();
 
-    // Register service worker
-    this.registerServiceWorker();
-
     // Set up online/offline listeners
     this.setupConnectivityListeners();
+  },
+
+  /**
+   * Handle sign out
+   */
+  handleSignOut() {
+    this.user = null;
+    this.items = [];
+    this.showLoginScreen();
+  },
+
+  /**
+   * Show login screen, hide app
+   */
+  showLoginScreen() {
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+  },
+
+  /**
+   * Show app, hide login screen
+   */
+  showApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  },
+
+  /**
+   * Sign in with Google
+   */
+  async signInWithGoogle() {
+    const { error } = await API.supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + window.location.pathname
+      }
+    });
+
+    if (error) {
+      console.error('Login error:', error);
+      const errorEl = document.getElementById('login-error');
+      errorEl.textContent = error.message;
+      errorEl.classList.remove('hidden');
+    }
+  },
+
+  /**
+   * Sign out
+   */
+  async signOut() {
+    await API.supabase.auth.signOut();
+  },
+
+  /**
+   * Bind auth-related event listeners
+   */
+  bindAuthEvents() {
+    document.getElementById('google-login-btn').addEventListener('click', () => this.signInWithGoogle());
+    document.getElementById('logout-btn').addEventListener('click', () => this.signOut());
   },
 
   /**
@@ -75,7 +172,10 @@ const App = {
       archiveBtn: document.getElementById('archive-btn'),
 
       // Toast
-      toastContainer: document.getElementById('toast-container')
+      toastContainer: document.getElementById('toast-container'),
+
+      // Auth
+      logoutBtn: document.getElementById('logout-btn')
     };
   },
 

@@ -25,6 +25,7 @@ A Progressive Web App for collecting notes, links, and articles throughout the w
 
 ```sql
 -- Drop existing table if re-running this setup
+drop policy if exists "Owner only" on items;
 drop policy if exists "Allow all operations" on items;
 drop table if exists items;
 
@@ -48,12 +49,11 @@ create index items_week_idx on items(week_of);
 -- Enable Row Level Security
 alter table items enable row level security;
 
--- Create a policy that allows all operations (public access)
--- For a personal app, this is fine. For multi-user, you'd add auth.
-create policy "Allow all operations" on items
+-- Create a policy that restricts access to the owner's email
+create policy "Owner only" on items
   for all
-  using (true)
-  with check (true);
+  using (auth.jwt() ->> 'email' = 'ahogue@gmail.com')
+  with check (auth.jwt() ->> 'email' = 'ahogue@gmail.com');
 ```
 
 3. Go to **Settings → API** and copy your:
@@ -127,23 +127,20 @@ netlify dev
 
 ## Security Notes
 
-This app uses Supabase with public (anon) access:
+This app uses Google SSO via Supabase Auth:
 
-- The anon key only allows operations permitted by RLS policies
-- The default RLS policy allows all operations (suitable for personal use)
-- For multi-user scenarios, add authentication and update RLS policies
+- Only the allowlisted email (ahogue@gmail.com) can access data
+- The RLS policy checks the JWT email claim
+- The anon key is safe to expose; security is enforced server-side
 
-To restrict access to authenticated users only, update the RLS policy:
+To change the allowed email, update the RLS policy in Supabase:
 
 ```sql
--- Drop the public policy
-drop policy "Allow all operations" on items;
-
--- Create authenticated-only policy
-create policy "Authenticated users only" on items
+drop policy "Owner only" on items;
+create policy "Owner only" on items
   for all
-  using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+  using (auth.jwt() ->> 'email' = 'your-email@gmail.com')
+  with check (auth.jwt() ->> 'email' = 'your-email@gmail.com');
 ```
 
 ## License
