@@ -36,7 +36,7 @@ const API = {
   },
 
   /**
-   * Get all active items for the current week
+   * Get all active items (regardless of week)
    */
   async getItems() {
     if (!this.isOnline()) {
@@ -45,13 +45,11 @@ const API = {
 
     try {
       this.init();
-      const weekOf = this.getCurrentWeekMonday();
 
       const { data, error } = await this.supabase
         .from('items')
         .select('*')
         .eq('status', 'active')
-        .eq('week_of', weekOf)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -317,12 +315,10 @@ const API = {
    * Archive all active items
    */
   async archiveItems() {
-    const weekOf = this.getCurrentWeekMonday();
-
     if (!this.isOnline()) {
       // Archive locally and queue
       await OfflineStore.archiveActiveItems();
-      await OfflineStore.queueOperation({ type: 'archive', weekOf });
+      await OfflineStore.queueOperation({ type: 'archive' });
       return;
     }
 
@@ -334,8 +330,7 @@ const API = {
           status: 'archived',
           updated_at: new Date().toISOString()
         })
-        .eq('status', 'active')
-        .eq('week_of', weekOf);
+        .eq('status', 'active');
 
       if (error) throw error;
 
@@ -343,7 +338,7 @@ const API = {
     } catch (error) {
       console.warn('Failed to archive on server, queued for later:', error);
       await OfflineStore.archiveActiveItems();
-      await OfflineStore.queueOperation({ type: 'archive', weekOf });
+      await OfflineStore.queueOperation({ type: 'archive' });
     }
   },
 
@@ -414,8 +409,7 @@ const API = {
                 status: 'archived',
                 updated_at: new Date().toISOString()
               })
-              .eq('status', 'active')
-              .eq('week_of', op.weekOf);
+              .eq('status', 'active');
 
             if (error) throw error;
             break;
@@ -444,13 +438,11 @@ const API = {
 
       // Then fetch fresh data from server
       this.init();
-      const weekOf = this.getCurrentWeekMonday();
 
       const { data, error } = await this.supabase
         .from('items')
         .select('*')
         .eq('status', 'active')
-        .eq('week_of', weekOf)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

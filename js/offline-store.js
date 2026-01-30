@@ -99,7 +99,7 @@ const OfflineStore = {
   },
 
   /**
-   * Get all active items for the current week
+   * Get all active items (regardless of week)
    */
   async getActiveItems() {
     await this.init();
@@ -108,8 +108,7 @@ const OfflineStore = {
       const request = store.index('status').getAll('active');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        const weekOf = this.getCurrentWeekMonday();
-        const items = request.result.filter(item => item.week_of === weekOf);
+        const items = request.result;
         // Sort by created_at descending (newest first)
         items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         resolve(items);
