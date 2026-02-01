@@ -20,6 +20,9 @@ const App = {
     // Set up auth event listeners
     this.bindAuthEvents();
 
+    // Set up app event listeners (only once)
+    this.bindEvents();
+
     // Initialize Supabase and check auth
     API.init();
     await this.checkAuth();
@@ -56,9 +59,6 @@ const App = {
   async handleSignIn(user) {
     this.user = user;
     this.showApp();
-
-    // Set up app event listeners
-    this.bindEvents();
 
     // Initialize offline store
     await OfflineStore.init();
