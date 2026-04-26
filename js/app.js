@@ -238,9 +238,10 @@ const App = {
     const params = new URLSearchParams(window.location.search);
     const url = params.get('url');
     const title = params.get('title');
+    const notes = params.get('notes');
     const text = params.get('text');
 
-    if (url || title || text) {
+    if (url || title || notes || text) {
       // Pre-fill the quick add form
       if (url) {
         this.elements.quickUrl.value = url;
@@ -249,7 +250,11 @@ const App = {
       }
 
       if (title) {
-        this.elements.quickNotes.value = title;
+        this.elements.quickTitle.value = title;
+      }
+
+      if (notes) {
+        this.elements.quickNotes.value = notes;
       } else if (text && !text.match(/^https?:\/\//)) {
         this.elements.quickNotes.value = text;
       }
